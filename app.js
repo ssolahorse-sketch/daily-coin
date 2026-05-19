@@ -60,6 +60,7 @@ const chartTitle = document.querySelector("#chartTitle");
 const chartBody = document.querySelector("#chartBody");
 const chartClose = document.querySelector("#chartClose");
 let chartDrag = null;
+let chartTouch = null;
 const activeChartPointers = new Map();
 let slideSettleTimer = null;
 
@@ -445,6 +446,11 @@ function renderChart() {
   `;
 
   const chartSvg = document.querySelector("#metricChart");
+  const anchorFromClientX = (clientX) => {
+    const rect = chartSvg.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (((clientX - rect.left) / rect.width) * width - pad.left) / (width - pad.left - pad.right)));
+    return offset + Math.round(ratio * (series.length - 1));
+  };
   const pickFromChart = (event) => {
     const rect = event.currentTarget.getBoundingClientRect();
     const chartX = ((event.clientX - rect.left) / rect.width) * width;
@@ -456,9 +462,7 @@ function renderChart() {
   };
   chartSvg?.addEventListener("wheel", (event) => {
     event.preventDefault();
-    const rect = event.currentTarget.getBoundingClientRect();
-    const ratio = Math.max(0, Math.min(1, (((event.clientX - rect.left) / rect.width) * width - pad.left) / (width - pad.left - pad.right)));
-    const anchorIndex = offset + Math.round(ratio * (series.length - 1));
+    const anchorIndex = anchorFromClientX(event.clientX);
     changeZoom(event.deltaY < 0 ? 1 : -1, anchorIndex);
   }, { passive: false });
   chartSvg?.addEventListener("pointerdown", (event) => {
@@ -509,6 +513,29 @@ function renderChart() {
   };
   chartSvg?.addEventListener("pointerup", endPointer);
   chartSvg?.addEventListener("pointercancel", endPointer);
+  chartSvg?.addEventListener("touchstart", (event) => {
+    if (event.touches.length === 2) {
+      event.preventDefault();
+      const [a, b] = event.touches;
+      chartTouch = {
+        distance: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY),
+        midpointX: (a.clientX + b.clientX) / 2
+      };
+    }
+  }, { passive: false });
+  chartSvg?.addEventListener("touchmove", (event) => {
+    if (!chartTouch || event.touches.length !== 2) return;
+    event.preventDefault();
+    const [a, b] = event.touches;
+    const distance = Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+    if (Math.abs(distance - chartTouch.distance) < 22) return;
+    const midpointX = (a.clientX + b.clientX) / 2;
+    changeZoom(distance > chartTouch.distance ? 1 : -1, anchorFromClientX(midpointX));
+    chartTouch = { distance, midpointX };
+  }, { passive: false });
+  chartSvg?.addEventListener("touchend", () => {
+    chartTouch = null;
+  });
 }
 
 function enterChart(metricKey) {

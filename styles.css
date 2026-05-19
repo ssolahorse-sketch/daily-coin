@@ -436,6 +436,8 @@ button {
 
 .chart-body {
   margin-top: 14px;
+  touch-action: none;
+  overscroll-behavior: contain;
 }
 
 .chart-tools {
@@ -462,6 +464,8 @@ button {
   margin-top: 12px;
   display: block;
   touch-action: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
   user-select: none;
 }
 
