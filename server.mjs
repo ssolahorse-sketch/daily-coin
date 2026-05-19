@@ -14,7 +14,7 @@ const AUTH_SECRET = env.SESSION_SECRET || crypto.randomBytes(32).toString("hex")
 const cache = new Map();
 
 const sourceNotes = {
-  btcDominance: "CoinGecko",
+  btcDominance: "CoinGecko / Alternative.me",
   fearGreed: "Alternative.me",
   altSeason: "BlockchainCenter",
   kimchiPremium: "Upbit / Coinbase / Frankfurter",
@@ -23,11 +23,11 @@ const sourceNotes = {
   ism: "ISM 공식 페이지",
   globalM2: "MetricsMonster",
   dxy: "Yahoo Finance",
-  btcRsi: "CoinGecko 14D RSI",
-  ethRsi: "CoinGecko 14D RSI",
-  xrpRsi: "CoinGecko 14D RSI",
-  solRsi: "CoinGecko 14D RSI",
-  fundingRate: "Binance Futures"
+  btcRsi: "Yahoo Finance 14D RSI",
+  ethRsi: "Yahoo Finance 14D RSI",
+  xrpRsi: "Yahoo Finance 14D RSI",
+  solRsi: "Yahoo Finance 14D RSI",
+  fundingRate: "Binance / Bybit Futures"
 };
 
 function todayUtc() {
@@ -90,8 +90,15 @@ function latestAny(rows) {
 }
 
 async function getBtcDominance() {
-  const json = await fetchJson("https://api.coingecko.com/api/v3/global");
-  const value = json?.data?.market_cap_percentage?.btc;
+  let value = null;
+  try {
+    const json = await fetchJson("https://api.coingecko.com/api/v3/global");
+    value = Number(json?.data?.market_cap_percentage?.btc);
+  } catch (error) {
+    const json = await fetchJson("https://api.alternative.me/v2/global/");
+    value = Number(json?.data?.bitcoin_percentage_of_market_cap);
+  }
+  if (!Number.isFinite(value)) throw new Error("BTC dominance data not found");
   return [{ date: todayUtc(), value: Number(value), label: `${Number(value).toFixed(1)}%` }];
 }
 
@@ -233,8 +240,14 @@ async function getDxy() {
 }
 
 async function getFundingRate() {
-  const json = await fetchJson("https://fapi.binance.com/fapi/v1/premiumIndex?symbol=BTCUSDT");
-  const value = Number(json?.lastFundingRate) * 100;
+  let value = null;
+  try {
+    const json = await fetchJson("https://fapi.binance.com/fapi/v1/premiumIndex?symbol=BTCUSDT");
+    value = Number(json?.lastFundingRate) * 100;
+  } catch (error) {
+    const json = await fetchJson("https://api.bybit.com/v5/market/funding/history?category=linear&symbol=BTCUSDT&limit=1");
+    value = Number(json?.result?.list?.[0]?.fundingRate) * 100;
+  }
   if (!Number.isFinite(value)) throw new Error("Funding rate not found");
   return [{ date: todayUtc(), value, label: `${value >= 0 ? "+" : ""}${value.toFixed(4)}%` }];
 }
@@ -264,9 +277,24 @@ function calculateRsiRows(priceRows, period = 14) {
   return rsiRows;
 }
 
+const yahooSymbols = {
+  bitcoin: "BTC-USD",
+  ethereum: "ETH-USD",
+  ripple: "XRP-USD",
+  solana: "SOL-USD"
+};
+
 async function getCoinRsi(coinId) {
-  const json = await fetchJson(`https://api.coingecko.com/api/v3/coins/${coinId}/market_chart?vs_currency=usd&days=120&interval=daily`);
-  const rows = calculateRsiRows(json?.prices || []);
+  const symbol = yahooSymbols[coinId];
+  if (!symbol) throw new Error(`${coinId} RSI symbol not found`);
+  const json = await fetchJson(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?range=6mo&interval=1d`);
+  const result = json?.chart?.result?.[0];
+  const timestamps = result?.timestamp || [];
+  const closes = result?.indicators?.quote?.[0]?.close || [];
+  const priceRows = timestamps
+    .map((time, index) => [Number(time) * 1000, Number(closes[index])])
+    .filter(([, price]) => Number.isFinite(price) && price > 0);
+  const rows = calculateRsiRows(priceRows);
   if (!rows.length) throw new Error(`${coinId} RSI data not found`);
   return rows;
 }
