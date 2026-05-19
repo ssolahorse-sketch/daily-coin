@@ -791,16 +791,20 @@ button {
 
   .dots {
     padding-top: 8px;
-    gap: 5px;
+    gap: 4px;
+    max-width: 184px;
+    margin-inline: auto;
+    overflow: hidden;
   }
 
   .dot {
-    width: 6px;
-    height: 6px;
+    width: 5px;
+    height: 5px;
+    flex: 0 0 auto;
   }
 
   .dot.active {
-    width: 18px;
+    width: 16px;
   }
 
   .chart-panel {
