@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Daily Coin</title>
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <div id="splash" class="splash" aria-label="Daily Coin loading">
+      <div class="logo-mark">DC</div>
+      <h1>Daily Coin</h1>
+    </div>
+
+    <main id="app" class="app" hidden>
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Market Pulse</p>
+          <h2>Daily Coin</h2>
+        </div>
+        <button id="refreshBtn" class="icon-button" aria-label="새로고침" title="새로고침">↻</button>
+      </header>
+
+      <section class="date-strip" aria-label="날짜 선택">
+        <button id="prevBtn" class="icon-button" aria-label="이전 날짜" title="이전 날짜">‹</button>
+        <div>
+          <p id="dateLabel" class="date-label">불러오는 중</p>
+          <p id="updatedLabel" class="updated-label">자동 데이터 연결 중</p>
+        </div>
+        <button id="nextBtn" class="icon-button" aria-label="다음 날짜" title="다음 날짜">›</button>
+      </section>
+
+      <section id="insightPanel" class="insight-panel" aria-live="polite" role="button" tabindex="0" aria-label="점수 산출 내역 보기">
+        <div class="score-block">
+          <p class="eyebrow">Daily Signal</p>
+          <div class="score-row">
+            <strong id="marketScore">--</strong>
+            <span id="marketRegime">계산 중</span>
+          </div>
+        </div>
+        <div id="signalList" class="signal-list"></div>
+        <p id="dailyReport" class="daily-report">지표를 불러오는 중입니다.</p>
+      </section>
+
+      <section id="slides" class="slides" aria-live="polite"></section>
+
+      <nav id="dots" class="dots" aria-label="날짜 페이지"></nav>
+
+      <section id="chartPanel" class="chart-panel" hidden aria-live="polite">
+        <div class="chart-head">
+          <div>
+            <p id="chartKicker" class="eyebrow">History</p>
+            <h3 id="chartTitle">차트</h3>
+          </div>
+          <button id="chartClose" class="icon-button" aria-label="이전 화면" title="이전 화면">‹</button>
+        </div>
+        <div id="chartBody" class="chart-body"></div>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
