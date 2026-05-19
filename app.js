@@ -354,7 +354,13 @@ function centerChartWindow() {
 
 function changeZoom(delta, anchorIndex = state.chartSelectedIndex) {
   const currentWindow = visibleChartSeries();
-  const nextZoom = Math.max(0, Math.min(state.chartZoom + delta, zoomWindows.length - 1));
+  let nextZoom = state.chartZoom;
+  do {
+    nextZoom = Math.max(0, Math.min(nextZoom + delta, zoomWindows.length - 1));
+    const size = zoomWindows[nextZoom];
+    const changesVisibleRange = !Number.isFinite(size) || state.chartData.length > size;
+    if (changesVisibleRange || nextZoom === 0 || nextZoom === zoomWindows.length - 1) break;
+  } while (nextZoom > 0 && nextZoom < zoomWindows.length - 1);
   if (nextZoom === state.chartZoom) return;
   state.chartZoom = nextZoom;
   anchorIndex = Math.max(0, Math.min(anchorIndex, state.chartData.length - 1));
