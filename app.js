@@ -352,17 +352,20 @@ function centerChartWindow() {
 }
 
 function changeZoom(delta, anchorIndex = state.chartSelectedIndex) {
+  const currentWindow = visibleChartSeries();
   const nextZoom = Math.max(0, Math.min(state.chartZoom + delta, zoomWindows.length - 1));
   if (nextZoom === state.chartZoom) return;
   state.chartZoom = nextZoom;
   anchorIndex = Math.max(0, Math.min(anchorIndex, state.chartData.length - 1));
-  centerChartWindow();
   const size = zoomWindows[state.chartZoom];
   if (Number.isFinite(size) && state.chartData.length > size) {
-    const visibleRatio = size <= 1 ? 0.5 : Math.max(0, Math.min(1, (anchorIndex - state.chartWindowStart) / size));
+    const visibleCount = Math.max(currentWindow.series.length - 1, 1);
+    const visibleRatio = Math.max(0, Math.min(1, (anchorIndex - currentWindow.offset) / visibleCount));
     const desiredStart = Math.round(anchorIndex - visibleRatio * size);
     const maxStart = Math.max(0, state.chartData.length - size);
     state.chartWindowStart = Math.max(0, Math.min(desiredStart, maxStart));
+  } else {
+    state.chartWindowStart = 0;
   }
   updateChrome();
   renderChart();
@@ -447,6 +450,8 @@ function renderChart() {
     const chartX = ((event.clientX - rect.left) / rect.width) * width;
     const ratio = (chartX - pad.left) / (width - pad.left - pad.right);
     const localIndex = Math.round(Math.max(0, Math.min(1, ratio)) * (series.length - 1));
+    activeChartPointers.clear();
+    chartDrag = null;
     setChartSelection(offset + localIndex);
   };
   chartSvg?.addEventListener("wheel", (event) => {
