@@ -472,6 +472,13 @@ function renderChart() {
     changeZoom(event.deltaY < 0 ? 1 : -1, anchorIndex);
   }, { passive: false });
   chartSvg?.addEventListener("pointerdown", (event) => {
+    if (event.pointerType === "touch" && event.isPrimary) {
+      activeChartPointers.clear();
+      chartTouch = null;
+    }
+    if (event.pointerType !== "touch") {
+      activeChartPointers.clear();
+    }
     event.currentTarget.setPointerCapture?.(event.pointerId);
     activeChartPointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
     chartDrag = {
@@ -505,6 +512,9 @@ function renderChart() {
       chartDrag.moved = true;
       return;
     }
+    if (event.pointerType === "touch") {
+      chartDrag.pinching = false;
+    }
     const dx = event.clientX - chartDrag.x;
     if (Math.abs(dx) > 4) chartDrag.moved = true;
     panChartByPixels(dx, width - pad.left - pad.right, series.length, chartDrag.startWindow);
@@ -520,6 +530,10 @@ function renderChart() {
   chartSvg?.addEventListener("pointerup", endPointer);
   chartSvg?.addEventListener("pointercancel", endPointer);
   chartSvg?.addEventListener("touchstart", (event) => {
+    if (event.touches.length < 2) {
+      chartTouch = null;
+      return;
+    }
     if (event.touches.length === 2) {
       event.preventDefault();
       const [a, b] = event.touches;
@@ -539,8 +553,8 @@ function renderChart() {
     changeZoom(distance > chartTouch.distance ? 1 : -1, anchorFromClientX(midpointX));
     chartTouch = { distance, midpointX };
   }, { passive: false });
-  chartSvg?.addEventListener("touchend", () => {
-    chartTouch = null;
+  chartSvg?.addEventListener("touchend", (event) => {
+    if (event.touches.length < 2) chartTouch = null;
   });
 }
 
