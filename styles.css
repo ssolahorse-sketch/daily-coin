@@ -231,11 +231,10 @@ button {
 
 .slides {
   display: flex;
-  gap: 0;
+  gap: 18px;
   margin-top: 18px;
   overflow-x: auto;
   scroll-snap-type: x mandatory;
-  overscroll-behavior-x: contain;
   scrollbar-width: none;
 }
 
@@ -245,9 +244,7 @@ button {
 
 .slide {
   flex: 0 0 100%;
-  min-width: 100%;
-  scroll-snap-align: start;
-  scroll-snap-stop: always;
+  scroll-snap-align: center;
 }
 
 .metric-grid {

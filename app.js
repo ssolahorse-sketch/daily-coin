@@ -707,22 +707,6 @@ function goTo(index, smooth = true) {
   refreshScoreDetail();
 }
 
-function settleSlides(smooth = true) {
-  if (!state.data || state.view !== "dashboard" || !slides.children.length) return;
-  const positions = [...slides.children].map((child) => child.offsetLeft - slides.offsetLeft);
-  const index = positions.reduce((closest, left, current) => {
-    const currentDistance = Math.abs(left - slides.scrollLeft);
-    const closestDistance = Math.abs(positions[closest] - slides.scrollLeft);
-    return currentDistance < closestDistance ? current : closest;
-  }, 0);
-  state.index = Math.max(0, Math.min(index, state.days.length - 1));
-  updateChrome();
-  const targetLeft = positions[state.index] || 0;
-  if (Math.abs(slides.scrollLeft - targetLeft) > 1) {
-    slides.scrollTo({ left: targetLeft, behavior: smooth ? "smooth" : "auto" });
-  }
-}
-
 function moveDate(delta) {
   if (state.view === "chart") {
     setChartSelection(state.chartSelectedIndex + delta);
@@ -764,17 +748,18 @@ insightPanel.addEventListener("keydown", (event) => {
 slides.addEventListener("scroll", () => {
   if (!state.data || state.view === "chart") return;
   clearTimeout(slideSettleTimer);
-  slideSettleTimer = setTimeout(() => settleSlides(true), 120);
-});
-
-slides.addEventListener("touchend", () => {
-  clearTimeout(slideSettleTimer);
-  slideSettleTimer = setTimeout(() => settleSlides(true), 40);
-});
-
-slides.addEventListener("pointerup", () => {
-  clearTimeout(slideSettleTimer);
-  slideSettleTimer = setTimeout(() => settleSlides(true), 40);
+  slideSettleTimer = setTimeout(() => {
+    const positions = [...slides.children].map((child) => child.offsetLeft - slides.offsetLeft);
+    const index = positions.reduce((closest, left, current) => {
+      const currentDistance = Math.abs(left - slides.scrollLeft);
+      const closestDistance = Math.abs(positions[closest] - slides.scrollLeft);
+      return currentDistance < closestDistance ? current : closest;
+    }, 0);
+    if (index !== state.index && index >= 0 && index < state.days.length) {
+      state.index = index;
+      updateChrome();
+    }
+  }, 140);
 });
 
 setTimeout(() => {
