@@ -16,6 +16,7 @@ const metrics = [
 ];
 
 const zoomWindows = [Infinity, 365, 120, 30];
+const visibleDotCount = 18;
 
 const state = {
   data: null,
@@ -657,8 +658,9 @@ function render() {
     </section>
   `).join("");
 
-  dots.innerHTML = state.days.map((day, index) => `
-    <button class="dot" data-index="${index}" aria-label="${formatDate(day.date)}"></button>
+  const dotStart = Math.max(0, state.days.length - visibleDotCount);
+  dots.innerHTML = state.days.slice(dotStart).map((day, index) => `
+    <button class="dot" data-index="${dotStart + index}" aria-label="${formatDate(day.date)}"></button>
   `).join("");
 
   dots.querySelectorAll(".dot").forEach((dot) => {
@@ -690,8 +692,8 @@ function updateChrome() {
     nextBtn.disabled = state.index >= state.days.length - 1;
   }
   updatedLabel.textContent = `업데이트 ${new Date(state.data.generatedAt).toLocaleString("ko-KR")}`;
-  dots.querySelectorAll(".dot").forEach((dot, index) => {
-    dot.classList.toggle("active", index === state.index);
+  dots.querySelectorAll(".dot").forEach((dot) => {
+    dot.classList.toggle("active", Number(dot.dataset.index) === state.index);
   });
   updateInsights();
 }
