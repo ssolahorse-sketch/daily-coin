@@ -27,7 +27,7 @@ const sourceNotes = {
   ethRsi: "Yahoo Finance 14D RSI",
   xrpRsi: "Yahoo Finance 14D RSI",
   solRsi: "Yahoo Finance 14D RSI",
-  fundingRate: "Binance / Bybit Futures"
+  fundingRate: "Binance / Bybit / OKX Futures"
 };
 
 function todayUtc() {
@@ -244,9 +244,14 @@ async function getFundingRate() {
   try {
     const json = await fetchJson("https://fapi.binance.com/fapi/v1/premiumIndex?symbol=BTCUSDT");
     value = Number(json?.lastFundingRate) * 100;
-  } catch (error) {
-    const json = await fetchJson("https://api.bybit.com/v5/market/funding/history?category=linear&symbol=BTCUSDT&limit=1");
-    value = Number(json?.result?.list?.[0]?.fundingRate) * 100;
+  } catch (binanceError) {
+    try {
+      const json = await fetchJson("https://api.bybit.com/v5/market/funding/history?category=linear&symbol=BTCUSDT&limit=1");
+      value = Number(json?.result?.list?.[0]?.fundingRate) * 100;
+    } catch (bybitError) {
+      const json = await fetchJson("https://www.okx.com/api/v5/public/funding-rate?instId=BTC-USDT-SWAP");
+      value = Number(json?.data?.[0]?.fundingRate) * 100;
+    }
   }
   if (!Number.isFinite(value)) throw new Error("Funding rate not found");
   return [{ date: todayUtc(), value, label: `${value >= 0 ? "+" : ""}${value.toFixed(4)}%` }];
