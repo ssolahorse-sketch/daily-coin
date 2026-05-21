@@ -273,6 +273,7 @@ function metricCard(metric, point, sources) {
   const meta = point?.error ? point.error : dataModeLabel;
   const hasChart = ["historical", "limited"].includes(metric.dataMode);
   const statusTag = metricStatusTag(metric, point);
+  const source = sources[metric.key] || "";
   return `
     <article class="metric-card ${tone(metric, point)}" data-metric="${metric.key}" role="button" tabindex="0" aria-label="${metric.title} 차트 보기">
       <div class="metric-head">
@@ -286,8 +287,7 @@ function metricCard(metric, point, sources) {
         </span>
       </div>
       <p class="metric-value">${label}</p>
-      <p class="metric-meta">${meta}</p>
-      <p class="metric-source">${sources[metric.key] || ""}</p>
+      <p class="metric-meta">${meta}${source ? `<span class="metric-separator">•</span><span class="metric-source">${source}</span>` : ""}</p>
     </article>
   `;
 }
