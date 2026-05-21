@@ -208,8 +208,18 @@ async function getGlobalM2() {
   return [{ date: todayUtc(), value: total, label: `$${total.toFixed(1)}T` }];
 }
 
+async function fetchYahooChart(symbol, range, interval = "1d") {
+  const encoded = encodeURIComponent(symbol);
+  const path = `/v8/finance/chart/${encoded}?range=${encodeURIComponent(range)}&interval=${encodeURIComponent(interval)}`;
+  try {
+    return await fetchJson(`https://query1.finance.yahoo.com${path}`);
+  } catch (error) {
+    return fetchJson(`https://query2.finance.yahoo.com${path}`);
+  }
+}
+
 async function getDxy() {
-  const json = await fetchJson("https://query1.finance.yahoo.com/v8/finance/chart/DX-Y.NYB?range=8y&interval=1d");
+  const json = await fetchYahooChart("DX-Y.NYB", "8y");
   const result = json?.chart?.result?.[0];
   const timestamps = result?.timestamp || [];
   const quote = result?.indicators?.quote?.[0] || {};
@@ -292,7 +302,7 @@ const yahooSymbols = {
 async function getCoinRsi(coinId) {
   const symbol = yahooSymbols[coinId];
   if (!symbol) throw new Error(`${coinId} RSI symbol not found`);
-  const json = await fetchJson(`https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?range=6mo&interval=1d`);
+  const json = await fetchYahooChart(symbol, "6mo");
   const result = json?.chart?.result?.[0];
   const timestamps = result?.timestamp || [];
   const closes = result?.indicators?.quote?.[0]?.close || [];
@@ -309,6 +319,10 @@ async function safeMetric(key, loader) {
     const rows = await loader();
     return { key, rows, ok: true };
   } catch (error) {
+    const fallbackRows = cache.get("history")?.data?.chartHistory?.[key] || [];
+    if (fallbackRows.length) {
+      return { key, rows: fallbackRows, ok: true, fallback: true, error: error.message };
+    }
     return { key, rows: [], ok: false, error: error.message };
   }
 }
@@ -357,13 +371,13 @@ async function buildHistory() {
         .sort((a, b) => a.date.localeCompare(b.date))
     ])),
     sources: sourceNotes,
-    status: Object.fromEntries(metrics.map((m) => [m.key, { ok: m.ok, error: m.error || null }]))
+    status: Object.fromEntries(metrics.map((m) => [m.key, { ok: m.ok, fallback: Boolean(m.fallback), error: m.error || null }]))
   };
 }
 
 async function apiHistory(res) {
   const cached = cache.get("history");
-  if (cached && Date.now() - cached.time < 10 * 60 * 1000) {
+  if (cached && Date.now() - cached.time < 30 * 60 * 1000) {
     sendJson(res, cached.data);
     return;
   }
