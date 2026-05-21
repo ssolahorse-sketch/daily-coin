@@ -89,6 +89,10 @@ function latestAny(rows) {
     .sort((a, b) => b.date.localeCompare(a.date))[0] || null;
 }
 
+function normalizePercent(value) {
+  return Number.isFinite(value) && value > 0 && value <= 1 ? value * 100 : value;
+}
+
 async function getBtcDominance() {
   let value = null;
   try {
@@ -98,6 +102,7 @@ async function getBtcDominance() {
     const json = await fetchJson("https://api.alternative.me/v2/global/");
     value = Number(json?.data?.bitcoin_percentage_of_market_cap);
   }
+  value = normalizePercent(value);
   if (!Number.isFinite(value)) throw new Error("BTC dominance data not found");
   return [{ date: todayUtc(), value: Number(value), label: `${Number(value).toFixed(1)}%` }];
 }
@@ -292,6 +297,16 @@ function calculateRsiRows(priceRows, period = 14) {
   return rsiRows;
 }
 
+function completedDailyPriceRows(timestamps, closes) {
+  const today = todayUtc();
+  return timestamps
+    .map((time, index) => [Number(time) * 1000, Number(closes[index])])
+    .filter(([time, price]) => {
+      const date = new Date(time).toISOString().slice(0, 10);
+      return date < today && Number.isFinite(price) && price > 0;
+    });
+}
+
 const yahooSymbols = {
   bitcoin: "BTC-USD",
   ethereum: "ETH-USD",
@@ -306,9 +321,7 @@ async function getCoinRsi(coinId) {
   const result = json?.chart?.result?.[0];
   const timestamps = result?.timestamp || [];
   const closes = result?.indicators?.quote?.[0]?.close || [];
-  const priceRows = timestamps
-    .map((time, index) => [Number(time) * 1000, Number(closes[index])])
-    .filter(([, price]) => Number.isFinite(price) && price > 0);
+  const priceRows = completedDailyPriceRows(timestamps, closes);
   const rows = calculateRsiRows(priceRows);
   if (!rows.length) throw new Error(`${coinId} RSI data not found`);
   return rows;
