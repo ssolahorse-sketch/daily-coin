@@ -13,6 +13,7 @@ const AUTH_COOKIE = "daily_coin_auth";
 const AUTH_SECRET = env.SESSION_SECRET || crypto.randomBytes(32).toString("hex");
 const cache = new Map();
 let upbitRequestChain = Promise.resolve();
+let binanceRequestChain = Promise.resolve();
 
 const sourceNotes = {
   fearGreed: "Alternative.me",
@@ -23,14 +24,14 @@ const sourceNotes = {
   ism: "ISM 공식 페이지",
   globalM2: "MetricsMonster",
   dxy: "Yahoo Finance",
-  btcRsi: "Upbit 8Y 14D RSI",
-  btcVolume: "Upbit 8Y 거래대금",
-  ethRsi: "Upbit 8Y 14D RSI",
-  ethVolume: "Upbit 8Y 거래대금",
-  xrpRsi: "Upbit 8Y 14D RSI",
-  xrpVolume: "Upbit 8Y 거래대금",
-  solRsi: "Upbit 8Y 14D RSI",
-  solVolume: "Upbit 8Y 거래대금",
+  btcRsi: "Binance Spot 8Y 14D RSI",
+  btcVolume: "Binance Spot 8Y USDT Volume",
+  ethRsi: "Binance Spot 8Y 14D RSI",
+  ethVolume: "Binance Spot 8Y USDT Volume",
+  xrpRsi: "Binance Spot 8Y 14D RSI",
+  xrpVolume: "Binance Spot 8Y USDT Volume",
+  solRsi: "Binance Spot 8Y 14D RSI",
+  solVolume: "Binance Spot 8Y USDT Volume",
   cryptoTotal1: "CoinGecko / CoinPaprika",
   cryptoTotal2: "CoinGecko / CoinPaprika",
   cryptoTotal3: "CoinGecko / CoinPaprika",
@@ -104,6 +105,24 @@ function fetchUpbitJson(url) {
     throw lastError;
   });
   upbitRequestChain = run.catch(() => {});
+  return run;
+}
+
+function fetchBinanceJson(pathAndQuery) {
+  const run = binanceRequestChain.then(async () => {
+    let lastError = null;
+    for (const baseUrl of ["https://data-api.binance.vision", "https://api.binance.com"]) {
+      try {
+        const data = await fetchJson(`${baseUrl}${pathAndQuery}`);
+        await delay(120);
+        return data;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    throw lastError;
+  });
+  binanceRequestChain = run.catch(() => {});
   return run;
 }
 
@@ -433,57 +452,61 @@ function completedDailyMarketRows(timestamps, closes, volumes) {
     .filter((row) => row.date < today && Number.isFinite(row.price) && row.price > 0);
 }
 
-const upbitMarkets = {
-  bitcoin: "KRW-BTC",
-  ethereum: "KRW-ETH",
-  ripple: "KRW-XRP",
-  solana: "KRW-SOL"
+const binanceSymbols = {
+  bitcoin: "BTCUSDT",
+  ethereum: "ETHUSDT",
+  ripple: "XRPUSDT",
+  solana: "SOLUSDT"
 };
 
 const coinMarketRowsCache = new Map();
 
 async function getCoinMarketRows(coinId) {
-  const market = upbitMarkets[coinId];
-  if (!market) throw new Error(`${coinId} market symbol not found`);
-  if (coinMarketRowsCache.has(market)) return coinMarketRowsCache.get(market);
-  const rowsPromise = getUpbitMarketRows(coinId, market);
-  coinMarketRowsCache.set(market, rowsPromise);
+  const symbol = binanceSymbols[coinId];
+  if (!symbol) throw new Error(`${coinId} market symbol not found`);
+  if (coinMarketRowsCache.has(symbol)) return coinMarketRowsCache.get(symbol);
+  const rowsPromise = getBinanceMarketRows(coinId, symbol);
+  coinMarketRowsCache.set(symbol, rowsPromise);
   try {
     const rows = await rowsPromise;
-    coinMarketRowsCache.set(market, rows);
+    coinMarketRowsCache.set(symbol, rows);
     return rows;
   } catch (error) {
-    coinMarketRowsCache.delete(market);
+    coinMarketRowsCache.delete(symbol);
     throw error;
   }
 }
 
-async function getUpbitMarketRows(coinId, market) {
+async function getBinanceMarketRows(coinId, symbol) {
   const today = todayUtc();
   const cutoffDate = new Date();
   cutoffDate.setUTCFullYear(cutoffDate.getUTCFullYear() - 8);
-  const cutoff = cutoffDate.toISOString().slice(0, 10);
+  let startTime = Date.UTC(cutoffDate.getUTCFullYear(), cutoffDate.getUTCMonth(), cutoffDate.getUTCDate());
+  const endTime = Date.now();
   const rows = [];
   const seen = new Set();
-  let to = null;
-  for (let page = 0; page < 18; page += 1) {
-    const url = new URL("https://api.upbit.com/v1/candles/days");
-    url.searchParams.set("market", market);
-    url.searchParams.set("count", "200");
-    if (to) url.searchParams.set("to", to);
-    const candles = await fetchUpbitJson(url.toString());
+  for (let page = 0; page < 5 && startTime < endTime; page += 1) {
+    const params = new URLSearchParams({
+      symbol,
+      interval: "1d",
+      limit: "1000",
+      startTime: String(startTime),
+      endTime: String(endTime)
+    });
+    const candles = await fetchBinanceJson(`/api/v3/klines?${params.toString()}`);
     if (!Array.isArray(candles) || !candles.length) break;
     for (const candle of candles) {
-      const date = String(candle.candle_date_time_utc || "").slice(0, 10);
-      const price = Number(candle.trade_price);
-      const volume = Number(candle.candle_acc_trade_price);
-      if (date >= today || date < cutoff || seen.has(date) || !Number.isFinite(price) || price <= 0) continue;
+      const openTime = Number(candle[0]);
+      const date = new Date(openTime).toISOString().slice(0, 10);
+      const price = Number(candle[4]);
+      const volume = Number(candle[7]);
+      if (date >= today || seen.has(date) || !Number.isFinite(price) || price <= 0) continue;
       seen.add(date);
       rows.push({ date, price, volume });
     }
-    const oldest = String(candles[candles.length - 1]?.candle_date_time_utc || "").slice(0, 10);
-    if (!oldest || oldest <= cutoff) break;
-    to = new Date(new Date(`${oldest}T00:00:00Z`).getTime() - DAY).toISOString();
+    const lastOpenTime = Number(candles[candles.length - 1]?.[0]);
+    if (!Number.isFinite(lastOpenTime) || lastOpenTime <= startTime) break;
+    startTime = lastOpenTime + DAY;
   }
   rows.sort((a, b) => a.date.localeCompare(b.date));
   if (!rows.length) throw new Error(`${coinId} market data not found`);
@@ -502,7 +525,7 @@ async function getCoinVolume(coinId) {
   const rows = await getCoinMarketRows(coinId);
   return rows
     .filter((row) => Number.isFinite(row.volume) && row.volume > 0)
-    .map((row) => ({ date: row.date, value: row.volume, label: formatKrw(row.volume) }));
+    .map((row) => ({ date: row.date, value: row.volume, label: formatUsd(row.volume) }));
 }
 
 async function safeMetric(key, loader) {
