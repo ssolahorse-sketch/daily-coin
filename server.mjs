@@ -788,7 +788,7 @@ function sendLoginPage(req, res) {
   </head>
   <body>
     <main>
-      <img class="logo" src="/assets/sola-horse-logo.png" alt="Solar Horse" fetchpriority="high" decoding="sync">
+      <img class="logo" src="/assets/sola-horse-logo.png" width="92" height="92" alt="Solar Horse" fetchpriority="high" decoding="sync">
       <h1>Solar Horse</h1>
       <p>${failed ? '<span class="error">비밀번호가 맞지 않습니다.</span>' : "비밀번호를 입력하세요."}</p>
       <form method="post" action="/api/login">
