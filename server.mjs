@@ -374,7 +374,7 @@ async function getYahooDxy() {
   const highs = quote.high || [];
   const lows = quote.low || [];
   const closes = quote.close || [];
-  return timestamps
+  const rows = timestamps
     .map((time, index) => ({
       date: new Date(time * 1000).toISOString().slice(0, 10),
       value: Number(closes[index]),
@@ -394,6 +394,8 @@ async function getYahooDxy() {
       && row.low > 0
     ))
     .map((row) => ({ ...row, label: row.value.toFixed(2), source: "Yahoo Finance" }));
+  if (!rows.length) throw new Error("Yahoo DXY data not found");
+  return rows;
 }
 
 async function getStooqDxy() {
@@ -401,7 +403,7 @@ async function getStooqDxy() {
   const cutoffDate = new Date();
   cutoffDate.setUTCFullYear(cutoffDate.getUTCFullYear() - 8);
   const cutoff = cutoffDate.toISOString().slice(0, 10);
-  return parseCsv(text)
+  const rows = parseCsv(text)
     .map(([date, open, high, low, close]) => ({
       date,
       value: Number(close),
@@ -422,6 +424,8 @@ async function getStooqDxy() {
       && row.low > 0
     ))
     .map((row) => ({ ...row, label: row.value.toFixed(2), source: "Stooq" }));
+  if (!rows.length) throw new Error("Stooq DXY data not found");
+  return rows;
 }
 
 async function getFundingRate() {
