@@ -3,20 +3,21 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Sola Horse</title>
+    <title>Solar Horse</title>
+    <link rel="preload" href="assets/sola-horse-logo.png" as="image">
     <link rel="stylesheet" href="styles.css">
   </head>
   <body>
-    <div id="splash" class="splash" aria-label="Sola Horse loading">
-      <img class="logo-mark" src="assets/sola-horse-logo.png" alt="Sola Horse">
-      <h1>Sola Horse</h1>
+    <div id="splash" class="splash" aria-label="Solar Horse loading">
+      <img class="logo-mark" src="assets/sola-horse-logo.png" alt="Solar Horse" fetchpriority="high" decoding="sync">
+      <h1>Solar Horse</h1>
     </div>
 
     <main id="app" class="app" hidden>
       <header class="topbar">
         <div>
           <p class="eyebrow">Market Pulse</p>
-          <h2>Sola Horse</h2>
+          <h2>Solar Horse</h2>
         </div>
         <button id="refreshBtn" class="icon-button" aria-label="새로고침" title="새로고침">↻</button>
       </header>

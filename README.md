@@ -1,6 +1,6 @@
-# Sola Horse
+# Solar Horse
 
-Sola Horse is a private crypto and macro dashboard.
+Solar Horse is a private crypto and macro dashboard.
 
 ## Run Locally
 
