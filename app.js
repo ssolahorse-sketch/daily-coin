@@ -71,6 +71,22 @@ let chartTouch = null;
 const activeChartPointers = new Map();
 let slideSettleTimer = null;
 
+function waitForSplashImage() {
+  const image = document.querySelector(".splash-bg");
+  if (!image) return Promise.resolve();
+  const loadPromise = image.complete
+    ? Promise.resolve()
+    : new Promise((resolve) => {
+      image.addEventListener("load", resolve, { once: true });
+      image.addEventListener("error", resolve, { once: true });
+    });
+  const decodePromise = image.decode ? image.decode().catch(() => {}) : Promise.resolve();
+  return Promise.race([
+    Promise.all([loadPromise, decodePromise]),
+    new Promise((resolve) => setTimeout(resolve, 1800))
+  ]);
+}
+
 function formatDate(date) {
   return new Intl.DateTimeFormat("ko-KR", {
     month: "long",
@@ -738,6 +754,12 @@ async function loadData() {
   }
 }
 
+async function startApp() {
+  app.hidden = false;
+  await Promise.all([waitForSplashImage(), loadData()]);
+  splash.classList.add("done");
+}
+
 prevBtn.addEventListener("click", () => moveDate(-1));
 nextBtn.addEventListener("click", () => moveDate(1));
 refreshBtn.addEventListener("click", loadData);
@@ -770,8 +792,4 @@ slides.addEventListener("scroll", () => {
   }, 140);
 });
 
-setTimeout(() => {
-  splash.classList.add("done");
-  app.hidden = false;
-  loadData();
-}, 900);
+startApp();
