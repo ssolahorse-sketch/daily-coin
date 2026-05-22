@@ -30,9 +30,9 @@ const sourceNotes = {
   xrpVolume: "Yahoo Finance 8Y Volume",
   solRsi: "Yahoo Finance 8Y 14D RSI",
   solVolume: "Yahoo Finance 8Y Volume",
-  cryptoTotal1: "CoinGecko Global",
-  cryptoTotal2: "CoinGecko Global",
-  cryptoTotal3: "CoinGecko Global",
+  cryptoTotal1: "CoinGecko / CoinPaprika",
+  cryptoTotal2: "CoinGecko / CoinPaprika",
+  cryptoTotal3: "CoinGecko / CoinPaprika",
   fundingRate: "Binance / Bybit / OKX Futures"
 };
 
@@ -194,7 +194,19 @@ function formatUsd(value) {
   return `$${value.toFixed(0)}`;
 }
 
-async function getCryptoMarketCaps() {
+function buildCryptoMarketCapRows(total, btcMarketCap, ethMarketCap) {
+  const rows = {
+    cryptoTotal1: total,
+    cryptoTotal2: total - btcMarketCap,
+    cryptoTotal3: total - btcMarketCap - ethMarketCap
+  };
+  return Object.fromEntries(Object.entries(rows).map(([key, value]) => [
+    key,
+    [{ date: todayUtc(), value, label: formatUsd(value) }]
+  ]));
+}
+
+async function getCoinGeckoMarketCaps() {
   const json = await fetchJson("https://api.coingecko.com/api/v3/global");
   const total = Number(json?.data?.total_market_cap?.usd);
   const btcShare = normalizePercent(Number(json?.data?.market_cap_percentage?.btc)) / 100;
@@ -202,15 +214,30 @@ async function getCryptoMarketCaps() {
   if (!Number.isFinite(total) || !Number.isFinite(btcShare) || !Number.isFinite(ethShare)) {
     throw new Error("Crypto total market cap data not found");
   }
-  const rows = {
-    cryptoTotal1: total,
-    cryptoTotal2: total * (1 - btcShare),
-    cryptoTotal3: total * (1 - btcShare - ethShare)
-  };
-  return Object.fromEntries(Object.entries(rows).map(([key, value]) => [
-    key,
-    [{ date: todayUtc(), value, label: formatUsd(value) }]
-  ]));
+  return buildCryptoMarketCapRows(total, total * btcShare, total * ethShare);
+}
+
+async function getCoinPaprikaMarketCaps() {
+  const [global, btc, eth] = await Promise.all([
+    fetchJson("https://api.coinpaprika.com/v1/global"),
+    fetchJson("https://api.coinpaprika.com/v1/tickers/btc-bitcoin"),
+    fetchJson("https://api.coinpaprika.com/v1/tickers/eth-ethereum")
+  ]);
+  const total = Number(global?.market_cap_usd);
+  const btcMarketCap = Number(btc?.quotes?.USD?.market_cap);
+  const ethMarketCap = Number(eth?.quotes?.USD?.market_cap);
+  if (!Number.isFinite(total) || !Number.isFinite(btcMarketCap) || !Number.isFinite(ethMarketCap)) {
+    throw new Error("CoinPaprika market cap data not found");
+  }
+  return buildCryptoMarketCapRows(total, btcMarketCap, ethMarketCap);
+}
+
+async function getCryptoMarketCaps() {
+  try {
+    return await getCoinGeckoMarketCaps();
+  } catch {
+    return getCoinPaprikaMarketCaps();
+  }
 }
 
 let cryptoMarketCapsSnapshot = null;
