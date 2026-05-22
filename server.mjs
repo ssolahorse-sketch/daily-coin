@@ -14,9 +14,8 @@ const AUTH_SECRET = env.SESSION_SECRET || crypto.randomBytes(32).toString("hex")
 const cache = new Map();
 
 const sourceNotes = {
-  btcDominance: "CoinGecko / Alternative.me",
   fearGreed: "Alternative.me",
-  altSeason: "BlockchainCenter",
+  seasonYear: "BlockchainCenter",
   kimchiPremium: "Upbit / Coinbase / Frankfurter",
   coinbaseRank: "Apple 앱 순위 RSS",
   mvrvz: "BGeometrics / Newhedge",
@@ -24,9 +23,16 @@ const sourceNotes = {
   globalM2: "MetricsMonster",
   dxy: "Yahoo Finance",
   btcRsi: "Yahoo Finance 14D RSI",
+  btcVolume: "Yahoo Finance Volume",
   ethRsi: "Yahoo Finance 14D RSI",
+  ethVolume: "Yahoo Finance Volume",
   xrpRsi: "Yahoo Finance 14D RSI",
+  xrpVolume: "Yahoo Finance Volume",
   solRsi: "Yahoo Finance 14D RSI",
+  solVolume: "Yahoo Finance Volume",
+  cryptoTotal1: "CoinGecko Global",
+  cryptoTotal2: "CoinGecko Global",
+  cryptoTotal3: "CoinGecko Global",
   fundingRate: "Binance / Bybit / OKX Futures"
 };
 
@@ -139,6 +145,21 @@ async function getAltSeason() {
   return [{ date: todayUtc(), value, label: `${value.toFixed(0)}/100` }];
 }
 
+async function getSeasonYear() {
+  const html = await fetchText("https://www.blockchaincenter.net/en/altcoin-season-index/");
+  const normalized = html.replace(/\\"/g, '"');
+  const historyMatch = normalized.match(/"365":\{([\s\S]*?)\}(?:,\")?/);
+  if (historyMatch) {
+    const rows = [...historyMatch[1].matchAll(/"(\d{4}-\d{2}-\d{2})":"(\d{1,3})"/g)]
+      .map((match) => {
+        const value = Number(match[2]);
+        return { date: match[1], value, label: `${value}/100` };
+      });
+    if (rows.length) return rows;
+  }
+  return getAltSeason();
+}
+
 async function getCoinbaseRank() {
   const url = "https://rss.applemarketingtools.com/api/v2/us/apps/top-free/100/apps.json";
   const json = await fetchJson(url);
@@ -163,6 +184,40 @@ async function getKimchiPremium() {
   }
   const value = ((krwPrice / (usdPrice * usdKrw)) - 1) * 100;
   return [{ date: todayUtc(), value, label: `${value >= 0 ? "+" : ""}${value.toFixed(2)}%` }];
+}
+
+function formatUsd(value) {
+  if (!Number.isFinite(value)) return "";
+  if (Math.abs(value) >= 1e12) return `$${(value / 1e12).toFixed(2)}T`;
+  if (Math.abs(value) >= 1e9) return `$${(value / 1e9).toFixed(1)}B`;
+  if (Math.abs(value) >= 1e6) return `$${(value / 1e6).toFixed(1)}M`;
+  return `$${value.toFixed(0)}`;
+}
+
+async function getCryptoMarketCaps() {
+  const json = await fetchJson("https://api.coingecko.com/api/v3/global");
+  const total = Number(json?.data?.total_market_cap?.usd);
+  const btcShare = normalizePercent(Number(json?.data?.market_cap_percentage?.btc)) / 100;
+  const ethShare = normalizePercent(Number(json?.data?.market_cap_percentage?.eth)) / 100;
+  if (!Number.isFinite(total) || !Number.isFinite(btcShare) || !Number.isFinite(ethShare)) {
+    throw new Error("Crypto total market cap data not found");
+  }
+  const rows = {
+    cryptoTotal1: total,
+    cryptoTotal2: total * (1 - btcShare),
+    cryptoTotal3: total * (1 - btcShare - ethShare)
+  };
+  return Object.fromEntries(Object.entries(rows).map(([key, value]) => [
+    key,
+    [{ date: todayUtc(), value, label: formatUsd(value) }]
+  ]));
+}
+
+let cryptoMarketCapsSnapshot = null;
+
+async function getCryptoMarketCapRows(key) {
+  if (!cryptoMarketCapsSnapshot) cryptoMarketCapsSnapshot = await getCryptoMarketCaps();
+  return cryptoMarketCapsSnapshot[key] || [];
 }
 
 async function getMvrvz(start, end) {
@@ -307,6 +362,17 @@ function completedDailyPriceRows(timestamps, closes) {
     });
 }
 
+function completedDailyMarketRows(timestamps, closes, volumes) {
+  const today = todayUtc();
+  return timestamps
+    .map((time, index) => ({
+      date: new Date(Number(time) * 1000).toISOString().slice(0, 10),
+      price: Number(closes[index]),
+      volume: Number(volumes[index])
+    }))
+    .filter((row) => row.date < today && Number.isFinite(row.price) && row.price > 0);
+}
+
 const yahooSymbols = {
   bitcoin: "BTC-USD",
   ethereum: "ETH-USD",
@@ -314,17 +380,35 @@ const yahooSymbols = {
   solana: "SOL-USD"
 };
 
-async function getCoinRsi(coinId) {
+const coinMarketRowsCache = new Map();
+
+async function getCoinMarketRows(coinId) {
   const symbol = yahooSymbols[coinId];
-  if (!symbol) throw new Error(`${coinId} RSI symbol not found`);
+  if (!symbol) throw new Error(`${coinId} market symbol not found`);
+  if (coinMarketRowsCache.has(symbol)) return coinMarketRowsCache.get(symbol);
   const json = await fetchYahooChart(symbol, "6mo");
   const result = json?.chart?.result?.[0];
   const timestamps = result?.timestamp || [];
-  const closes = result?.indicators?.quote?.[0]?.close || [];
-  const priceRows = completedDailyPriceRows(timestamps, closes);
+  const quote = result?.indicators?.quote?.[0] || {};
+  const rows = completedDailyMarketRows(timestamps, quote.close || [], quote.volume || []);
+  if (!rows.length) throw new Error(`${coinId} market data not found`);
+  coinMarketRowsCache.set(symbol, rows);
+  return rows;
+}
+
+async function getCoinRsi(coinId) {
+  const marketRows = await getCoinMarketRows(coinId);
+  const priceRows = marketRows.map((row) => [new Date(`${row.date}T00:00:00Z`).getTime(), row.price]);
   const rows = calculateRsiRows(priceRows);
   if (!rows.length) throw new Error(`${coinId} RSI data not found`);
   return rows;
+}
+
+async function getCoinVolume(coinId) {
+  const rows = await getCoinMarketRows(coinId);
+  return rows
+    .filter((row) => Number.isFinite(row.volume) && row.volume > 0)
+    .map((row) => ({ date: row.date, value: row.volume, label: formatUsd(row.volume) }));
 }
 
 async function safeMetric(key, loader) {
@@ -344,22 +428,30 @@ async function buildHistory() {
   const dates = daysBack(31);
   const start = dates[dates.length - 1];
   const end = dates[0];
-  const carryLatestAcrossDates = new Set(["btcDominance", "coinbaseRank", "kimchiPremium", "mvrvz", "ism", "globalM2", "fundingRate"]);
+  cryptoMarketCapsSnapshot = null;
+  coinMarketRowsCache.clear();
+  const carryLatestAcrossDates = new Set(["coinbaseRank", "kimchiPremium", "mvrvz", "ism", "globalM2", "fundingRate", "cryptoTotal1", "cryptoTotal2", "cryptoTotal3"]);
   const metrics = await Promise.all([
-    safeMetric("btcDominance", getBtcDominance),
-    safeMetric("fearGreed", getFearGreed),
-    safeMetric("altSeason", getAltSeason),
-    safeMetric("coinbaseRank", getCoinbaseRank),
-    safeMetric("kimchiPremium", getKimchiPremium),
-    safeMetric("mvrvz", () => getMvrvz(start, end)),
-    safeMetric("ism", getIsm),
-    safeMetric("globalM2", getGlobalM2),
-    safeMetric("dxy", getDxy),
     safeMetric("btcRsi", () => getCoinRsi("bitcoin")),
+    safeMetric("btcVolume", () => getCoinVolume("bitcoin")),
     safeMetric("ethRsi", () => getCoinRsi("ethereum")),
+    safeMetric("ethVolume", () => getCoinVolume("ethereum")),
     safeMetric("xrpRsi", () => getCoinRsi("ripple")),
+    safeMetric("xrpVolume", () => getCoinVolume("ripple")),
     safeMetric("solRsi", () => getCoinRsi("solana")),
-    safeMetric("fundingRate", getFundingRate)
+    safeMetric("solVolume", () => getCoinVolume("solana")),
+    safeMetric("seasonYear", getSeasonYear),
+    safeMetric("kimchiPremium", getKimchiPremium),
+    safeMetric("dxy", getDxy),
+    safeMetric("cryptoTotal1", () => getCryptoMarketCapRows("cryptoTotal1")),
+    safeMetric("cryptoTotal2", () => getCryptoMarketCapRows("cryptoTotal2")),
+    safeMetric("cryptoTotal3", () => getCryptoMarketCapRows("cryptoTotal3")),
+    safeMetric("coinbaseRank", getCoinbaseRank),
+    safeMetric("fearGreed", getFearGreed),
+    safeMetric("mvrvz", () => getMvrvz(start, end)),
+    safeMetric("fundingRate", getFundingRate),
+    safeMetric("ism", getIsm),
+    safeMetric("globalM2", getGlobalM2)
   ]);
 
   const history = dates.map((date) => {

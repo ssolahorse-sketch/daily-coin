@@ -1,18 +1,24 @@
 const metrics = [
   { key: "btcRsi", title: "비트코인 RSI", icon: "BR", kind: "rsi", dataMode: "historical" },
+  { key: "btcVolume", title: "비트코인 거래량", icon: "BV", kind: "volume", dataMode: "historical" },
   { key: "ethRsi", title: "이더리움 RSI", icon: "ER", kind: "rsi", dataMode: "historical" },
+  { key: "ethVolume", title: "이더리움 거래량", icon: "EV", kind: "volume", dataMode: "historical" },
   { key: "xrpRsi", title: "리플 RSI", icon: "XR", kind: "rsi", dataMode: "historical" },
+  { key: "xrpVolume", title: "리플 거래량", icon: "XV", kind: "volume", dataMode: "historical" },
   { key: "solRsi", title: "솔라나 RSI", icon: "SR", kind: "rsi", dataMode: "historical" },
-  { key: "btcDominance", title: "비트코인 도미넌스", icon: "B", kind: "inverse", dataMode: "current" },
-  { key: "fearGreed", title: "공포탐욕지수", icon: "FG", kind: "sentiment", dataMode: "historical" },
-  { key: "altSeason", title: "알트시즌 인덱스", icon: "A", kind: "sentiment", dataMode: "historical" },
-  { key: "coinbaseRank", title: "코인베이스 앱 순위", icon: "#", kind: "rank", dataMode: "current" },
+  { key: "solVolume", title: "솔라나 거래량", icon: "SV", kind: "volume", dataMode: "historical" },
+  { key: "seasonYear", title: "시즌 Year 지수", icon: "Y", kind: "sentiment", dataMode: "historical" },
   { key: "kimchiPremium", title: "김치프리미엄", icon: "K", kind: "premium", dataMode: "current" },
-  { key: "mvrvz", title: "MVRV Z-Score", icon: "Z", kind: "mvrv", dataMode: "limited" },
-  { key: "ism", title: "ISM 제조업지수", icon: "I", kind: "ism", dataMode: "release" },
-  { key: "globalM2", title: "Global M2", icon: "M2", kind: "neutral", dataMode: "current" },
-  { key: "dxy", title: "DXY", icon: "$", kind: "dxy", dataMode: "historical" },
-  { key: "fundingRate", title: "펀딩비", icon: "F", kind: "funding", dataMode: "current" }
+  { key: "dxy", title: "달러인덱스 (DXY)", icon: "$", kind: "dxy", dataMode: "historical" },
+  { key: "cryptoTotal1", title: "크립토 토탈마켓캡 1", icon: "T1", kind: "neutral", dataMode: "current" },
+  { key: "cryptoTotal2", title: "크립토 토탈마켓캡 2", icon: "T2", kind: "neutral", dataMode: "current" },
+  { key: "cryptoTotal3", title: "크립토 토탈마켓캡 3", icon: "T3", kind: "neutral", dataMode: "current" },
+  { key: "coinbaseRank", title: "코인베이스 앱 순위", icon: "#", kind: "rank", dataMode: "current" },
+  { key: "fearGreed", title: "공포탐욕지수", icon: "FG", kind: "sentiment", dataMode: "historical" },
+  { key: "mvrvz", title: "MVRV-Z", icon: "Z", kind: "mvrv", dataMode: "limited" },
+  { key: "fundingRate", title: "펀딩비", icon: "F", kind: "funding", dataMode: "current" },
+  { key: "ism", title: "ISM 지수", icon: "I", kind: "ism", dataMode: "release" },
+  { key: "globalM2", title: "Global M2", icon: "M2", kind: "neutral", dataMode: "current" }
 ];
 
 const zoomWindows = [Infinity, 365, 120, 30];
@@ -213,7 +219,7 @@ function metricStatusTag(metric, point) {
     return { tone: "warn", text: "중립" };
   }
 
-  if (metric.key === "altSeason") {
+  if (metric.key === "altSeason" || metric.key === "seasonYear") {
     if (v >= 75) return { tone: "bad", text: "알트시즌" };
     if (v <= 25) return { tone: "warn", text: "비트코인 시즌" };
     return { tone: "warn", text: "중립" };
@@ -583,7 +589,7 @@ function exitChart() {
   chartPanel.hidden = true;
   slides.hidden = false;
   dots.hidden = false;
-  insightPanel.hidden = false;
+  insightPanel.hidden = true;
   goTo(returnIndex, false);
 }
 
@@ -593,7 +599,7 @@ function closeDetailView() {
   chartPanel.hidden = true;
   slides.hidden = false;
   dots.hidden = false;
-  insightPanel.hidden = false;
+  insightPanel.hidden = true;
   goTo(returnIndex, false);
 }
 
