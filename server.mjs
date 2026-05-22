@@ -22,14 +22,14 @@ const sourceNotes = {
   ism: "ISM 공식 페이지",
   globalM2: "MetricsMonster",
   dxy: "Yahoo Finance",
-  btcRsi: "Yahoo Finance 14D RSI",
-  btcVolume: "Yahoo Finance Volume",
-  ethRsi: "Yahoo Finance 14D RSI",
-  ethVolume: "Yahoo Finance Volume",
-  xrpRsi: "Yahoo Finance 14D RSI",
-  xrpVolume: "Yahoo Finance Volume",
-  solRsi: "Yahoo Finance 14D RSI",
-  solVolume: "Yahoo Finance Volume",
+  btcRsi: "Yahoo Finance 8Y 14D RSI",
+  btcVolume: "Yahoo Finance 8Y Volume",
+  ethRsi: "Yahoo Finance 8Y 14D RSI",
+  ethVolume: "Yahoo Finance 8Y Volume",
+  xrpRsi: "Yahoo Finance 8Y 14D RSI",
+  xrpVolume: "Yahoo Finance 8Y Volume",
+  solRsi: "Yahoo Finance 8Y 14D RSI",
+  solVolume: "Yahoo Finance 8Y Volume",
   cryptoTotal1: "CoinGecko Global",
   cryptoTotal2: "CoinGecko Global",
   cryptoTotal3: "CoinGecko Global",
@@ -386,7 +386,7 @@ async function getCoinMarketRows(coinId) {
   const symbol = yahooSymbols[coinId];
   if (!symbol) throw new Error(`${coinId} market symbol not found`);
   if (coinMarketRowsCache.has(symbol)) return coinMarketRowsCache.get(symbol);
-  const json = await fetchYahooChart(symbol, "6mo");
+  const json = await fetchYahooChart(symbol, "8y");
   const result = json?.chart?.result?.[0];
   const timestamps = result?.timestamp || [];
   const quote = result?.indicators?.quote?.[0] || {};
