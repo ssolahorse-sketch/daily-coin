@@ -23,7 +23,7 @@ const sourceNotes = {
   mvrvz: "BGeometrics / Newhedge",
   ism: "ISM 공식 페이지",
   globalM2: "MetricsMonster",
-  dxy: "Yahoo Finance",
+  dxy: "Yahoo Finance / Stooq",
   btcRsi: "Binance Spot 8Y 14D RSI",
   btcVolume: "Binance Spot 8Y USDT Volume",
   ethRsi: "Binance Spot 8Y 14D RSI",
@@ -358,6 +358,14 @@ async function fetchYahooChart(symbol, range, interval = "1d") {
 }
 
 async function getDxy() {
+  try {
+    return await getYahooDxy();
+  } catch {
+    return getStooqDxy();
+  }
+}
+
+async function getYahooDxy() {
   const json = await fetchYahooChart("DX-Y.NYB", "8y");
   const result = json?.chart?.result?.[0];
   const timestamps = result?.timestamp || [];
@@ -385,7 +393,35 @@ async function getDxy() {
       && row.high > 0
       && row.low > 0
     ))
-    .map((row) => ({ ...row, label: row.value.toFixed(2) }));
+    .map((row) => ({ ...row, label: row.value.toFixed(2), source: "Yahoo Finance" }));
+}
+
+async function getStooqDxy() {
+  const text = await fetchText("https://stooq.com/q/d/l/?s=dx.f&i=d");
+  const cutoffDate = new Date();
+  cutoffDate.setUTCFullYear(cutoffDate.getUTCFullYear() - 8);
+  const cutoff = cutoffDate.toISOString().slice(0, 10);
+  return parseCsv(text)
+    .map(([date, open, high, low, close]) => ({
+      date,
+      value: Number(close),
+      open: Number(open),
+      high: Number(high),
+      low: Number(low),
+      close: Number(close)
+    }))
+    .filter((row) => (
+      row.date >= cutoff
+      && Number.isFinite(row.value)
+      && Number.isFinite(row.open)
+      && Number.isFinite(row.high)
+      && Number.isFinite(row.low)
+      && row.value > 0
+      && row.open > 0
+      && row.high > 0
+      && row.low > 0
+    ))
+    .map((row) => ({ ...row, label: row.value.toFixed(2), source: "Stooq" }));
 }
 
 async function getFundingRate() {
@@ -462,20 +498,13 @@ const binanceSymbols = {
   solana: "SOLUSDT"
 };
 
-const yahooCoinSymbols = {
-  bitcoin: "BTC-USD",
-  ethereum: "ETH-USD",
-  ripple: "XRP-USD",
-  solana: "SOL-USD"
-};
-
 const coinMarketRowsCache = new Map();
 
 async function getCoinMarketRows(coinId) {
   const symbol = binanceSymbols[coinId];
   if (!symbol) throw new Error(`${coinId} market symbol not found`);
   if (coinMarketRowsCache.has(symbol)) return coinMarketRowsCache.get(symbol);
-  const rowsPromise = getBinanceMarketRows(coinId, symbol).catch(() => getYahooCoinMarketRows(coinId));
+  const rowsPromise = getBinanceMarketRows(coinId, symbol);
   coinMarketRowsCache.set(symbol, rowsPromise);
   try {
     const rows = await rowsPromise;
@@ -520,19 +549,6 @@ async function getBinanceMarketRows(coinId, symbol) {
   }
   rows.sort((a, b) => a.date.localeCompare(b.date));
   if (!rows.length) throw new Error(`${coinId} market data not found`);
-  return rows;
-}
-
-async function getYahooCoinMarketRows(coinId) {
-  const symbol = yahooCoinSymbols[coinId];
-  if (!symbol) throw new Error(`${coinId} Yahoo symbol not found`);
-  const json = await fetchYahooChart(symbol, "8y");
-  const result = json?.chart?.result?.[0];
-  const timestamps = result?.timestamp || [];
-  const quote = result?.indicators?.quote?.[0] || {};
-  const rows = completedDailyMarketRows(timestamps, quote.close || [], quote.volume || [])
-    .map((row) => ({ ...row, source: "Yahoo Finance" }));
-  if (!rows.length) throw new Error(`${coinId} Yahoo market data not found`);
   return rows;
 }
 
