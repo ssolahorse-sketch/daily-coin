@@ -246,7 +246,7 @@ function formatKrw(value) {
   return value.toFixed(0);
 }
 
-function buildCryptoMarketCapRows(total, btcMarketCap, ethMarketCap) {
+function buildCryptoMarketCapRows(total, btcMarketCap, ethMarketCap, source) {
   const rows = {
     cryptoTotal1: total,
     cryptoTotal2: total - btcMarketCap,
@@ -254,7 +254,7 @@ function buildCryptoMarketCapRows(total, btcMarketCap, ethMarketCap) {
   };
   return Object.fromEntries(Object.entries(rows).map(([key, value]) => [
     key,
-    [{ date: todayUtc(), value, label: formatUsd(value) }]
+    [{ date: todayUtc(), value, label: formatUsd(value), source }]
   ]));
 }
 
@@ -266,7 +266,7 @@ async function getCoinGeckoMarketCaps() {
   if (!Number.isFinite(total) || !Number.isFinite(btcShare) || !Number.isFinite(ethShare)) {
     throw new Error("Crypto total market cap data not found");
   }
-  return buildCryptoMarketCapRows(total, total * btcShare, total * ethShare);
+  return buildCryptoMarketCapRows(total, total * btcShare, total * ethShare, "CoinGecko");
 }
 
 async function getCoinPaprikaMarketCaps() {
@@ -281,7 +281,7 @@ async function getCoinPaprikaMarketCaps() {
   if (!Number.isFinite(total) || !Number.isFinite(btcMarketCap) || !Number.isFinite(ethMarketCap)) {
     throw new Error("CoinPaprika market cap data not found");
   }
-  return buildCryptoMarketCapRows(total, btcMarketCap, ethMarketCap);
+  return buildCryptoMarketCapRows(total, btcMarketCap, ethMarketCap, "CoinPaprika");
 }
 
 async function getCryptoMarketCaps() {
@@ -390,6 +390,7 @@ async function getDxy() {
 
 async function getFundingRate() {
   let value = null;
+  let source = "Binance Futures";
   try {
     const json = await fetchJson("https://fapi.binance.com/fapi/v1/premiumIndex?symbol=BTCUSDT");
     value = Number(json?.lastFundingRate) * 100;
@@ -397,13 +398,15 @@ async function getFundingRate() {
     try {
       const json = await fetchJson("https://api.bybit.com/v5/market/funding/history?category=linear&symbol=BTCUSDT&limit=1");
       value = Number(json?.result?.list?.[0]?.fundingRate) * 100;
+      source = "Bybit Futures";
     } catch (bybitError) {
       const json = await fetchJson("https://www.okx.com/api/v5/public/funding-rate?instId=BTC-USDT-SWAP");
       value = Number(json?.data?.[0]?.fundingRate) * 100;
+      source = "OKX Futures";
     }
   }
   if (!Number.isFinite(value)) throw new Error("Funding rate not found");
-  return [{ date: todayUtc(), value, label: `${value >= 0 ? "+" : ""}${value.toFixed(4)}%` }];
+  return [{ date: todayUtc(), value, label: `${value >= 0 ? "+" : ""}${value.toFixed(4)}%`, source }];
 }
 
 function calculateRsiRows(priceRows, period = 14) {
@@ -518,14 +521,14 @@ async function getCoinRsi(coinId) {
   const priceRows = marketRows.map((row) => [new Date(`${row.date}T00:00:00Z`).getTime(), row.price]);
   const rows = calculateRsiRows(priceRows);
   if (!rows.length) throw new Error(`${coinId} RSI data not found`);
-  return rows;
+  return rows.map((row) => ({ ...row, source: "Binance Spot" }));
 }
 
 async function getCoinVolume(coinId) {
   const rows = await getCoinMarketRows(coinId);
   return rows
     .filter((row) => Number.isFinite(row.volume) && row.volume > 0)
-    .map((row) => ({ date: row.date, value: row.volume, label: formatUsd(row.volume) }));
+    .map((row) => ({ date: row.date, value: row.volume, label: formatUsd(row.volume), source: "Binance Spot" }));
 }
 
 async function safeMetric(key, loader) {
@@ -576,7 +579,7 @@ async function buildHistory() {
     for (const metric of metrics) {
       const row = latestKnown(metric.rows, date) || (carryLatestAcrossDates.has(metric.key) ? latestAny(metric.rows) : null);
       values[metric.key] = row
-        ? { value: row.value, label: row.label, date: row.date, stale: row.date !== date }
+        ? { value: row.value, label: row.label, date: row.date, stale: row.date !== date, source: row.source || sourceNotes[metric.key] }
         : { value: null, label: metric.ok ? "데이터 없음" : "연결 필요", error: metric.error };
     }
     return { date, values };
