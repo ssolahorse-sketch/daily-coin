@@ -12,6 +12,7 @@ const DAY = 24 * 60 * 60 * 1000;
 const AUTH_COOKIE = "daily_coin_auth";
 const AUTH_SECRET = env.SESSION_SECRET || crypto.randomBytes(32).toString("hex");
 const cache = new Map();
+let upbitRequestChain = Promise.resolve();
 
 const sourceNotes = {
   fearGreed: "Alternative.me",
@@ -22,14 +23,14 @@ const sourceNotes = {
   ism: "ISM 공식 페이지",
   globalM2: "MetricsMonster",
   dxy: "Yahoo Finance",
-  btcRsi: "Yahoo Finance 8Y 14D RSI",
-  btcVolume: "Yahoo Finance 8Y Volume",
-  ethRsi: "Yahoo Finance 8Y 14D RSI",
-  ethVolume: "Yahoo Finance 8Y Volume",
-  xrpRsi: "Yahoo Finance 8Y 14D RSI",
-  xrpVolume: "Yahoo Finance 8Y Volume",
-  solRsi: "Yahoo Finance 8Y 14D RSI",
-  solVolume: "Yahoo Finance 8Y Volume",
+  btcRsi: "Upbit 8Y 14D RSI",
+  btcVolume: "Upbit 8Y 거래대금",
+  ethRsi: "Upbit 8Y 14D RSI",
+  ethVolume: "Upbit 8Y 거래대금",
+  xrpRsi: "Upbit 8Y 14D RSI",
+  xrpVolume: "Upbit 8Y 거래대금",
+  solRsi: "Upbit 8Y 14D RSI",
+  solVolume: "Upbit 8Y 거래대금",
   cryptoTotal1: "CoinGecko / CoinPaprika",
   cryptoTotal2: "CoinGecko / CoinPaprika",
   cryptoTotal3: "CoinGecko / CoinPaprika",
@@ -80,6 +81,30 @@ async function fetchText(url, options = {}) {
 async function fetchJson(url, options = {}) {
   const text = await fetchText(url, options);
   return JSON.parse(text);
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function fetchUpbitJson(url) {
+  const run = upbitRequestChain.then(async () => {
+    let lastError = null;
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      try {
+        const data = await fetchJson(url);
+        await delay(140);
+        return data;
+      } catch (error) {
+        lastError = error;
+        if (!String(error.message || error).includes("429")) throw error;
+        await delay(700 * (attempt + 1));
+      }
+    }
+    throw lastError;
+  });
+  upbitRequestChain = run.catch(() => {});
+  return run;
 }
 
 function latestKnown(rows, date) {
@@ -192,6 +217,14 @@ function formatUsd(value) {
   if (Math.abs(value) >= 1e9) return `$${(value / 1e9).toFixed(1)}B`;
   if (Math.abs(value) >= 1e6) return `$${(value / 1e6).toFixed(1)}M`;
   return `$${value.toFixed(0)}`;
+}
+
+function formatKrw(value) {
+  if (!Number.isFinite(value)) return "";
+  if (Math.abs(value) >= 1e12) return `${(value / 1e12).toFixed(2)}조`;
+  if (Math.abs(value) >= 1e8) return `${(value / 1e8).toFixed(1)}억`;
+  if (Math.abs(value) >= 1e4) return `${(value / 1e4).toFixed(1)}만`;
+  return value.toFixed(0);
 }
 
 function buildCryptoMarketCapRows(total, btcMarketCap, ethMarketCap) {
@@ -400,26 +433,60 @@ function completedDailyMarketRows(timestamps, closes, volumes) {
     .filter((row) => row.date < today && Number.isFinite(row.price) && row.price > 0);
 }
 
-const yahooSymbols = {
-  bitcoin: "BTC-USD",
-  ethereum: "ETH-USD",
-  ripple: "XRP-USD",
-  solana: "SOL-USD"
+const upbitMarkets = {
+  bitcoin: "KRW-BTC",
+  ethereum: "KRW-ETH",
+  ripple: "KRW-XRP",
+  solana: "KRW-SOL"
 };
 
 const coinMarketRowsCache = new Map();
 
 async function getCoinMarketRows(coinId) {
-  const symbol = yahooSymbols[coinId];
-  if (!symbol) throw new Error(`${coinId} market symbol not found`);
-  if (coinMarketRowsCache.has(symbol)) return coinMarketRowsCache.get(symbol);
-  const json = await fetchYahooChart(symbol, "8y");
-  const result = json?.chart?.result?.[0];
-  const timestamps = result?.timestamp || [];
-  const quote = result?.indicators?.quote?.[0] || {};
-  const rows = completedDailyMarketRows(timestamps, quote.close || [], quote.volume || []);
+  const market = upbitMarkets[coinId];
+  if (!market) throw new Error(`${coinId} market symbol not found`);
+  if (coinMarketRowsCache.has(market)) return coinMarketRowsCache.get(market);
+  const rowsPromise = getUpbitMarketRows(coinId, market);
+  coinMarketRowsCache.set(market, rowsPromise);
+  try {
+    const rows = await rowsPromise;
+    coinMarketRowsCache.set(market, rows);
+    return rows;
+  } catch (error) {
+    coinMarketRowsCache.delete(market);
+    throw error;
+  }
+}
+
+async function getUpbitMarketRows(coinId, market) {
+  const today = todayUtc();
+  const cutoffDate = new Date();
+  cutoffDate.setUTCFullYear(cutoffDate.getUTCFullYear() - 8);
+  const cutoff = cutoffDate.toISOString().slice(0, 10);
+  const rows = [];
+  const seen = new Set();
+  let to = null;
+  for (let page = 0; page < 18; page += 1) {
+    const url = new URL("https://api.upbit.com/v1/candles/days");
+    url.searchParams.set("market", market);
+    url.searchParams.set("count", "200");
+    if (to) url.searchParams.set("to", to);
+    const candles = await fetchUpbitJson(url.toString());
+    if (!Array.isArray(candles) || !candles.length) break;
+    for (const candle of candles) {
+      const date = String(candle.candle_date_time_utc || "").slice(0, 10);
+      const price = Number(candle.trade_price);
+      const volume = Number(candle.candle_acc_trade_price);
+      if (date >= today || date < cutoff || seen.has(date) || !Number.isFinite(price) || price <= 0) continue;
+      seen.add(date);
+      rows.push({ date, price, volume });
+    }
+    const oldest = String(candles[candles.length - 1]?.candle_date_time_utc || "").slice(0, 10);
+    if (!oldest || oldest <= cutoff) break;
+    to = new Date(new Date(`${oldest}T00:00:00Z`).getTime() - DAY).toISOString();
+  }
+  rows.sort((a, b) => a.date.localeCompare(b.date));
   if (!rows.length) throw new Error(`${coinId} market data not found`);
-  coinMarketRowsCache.set(symbol, rows);
   return rows;
 }
 
@@ -435,7 +502,7 @@ async function getCoinVolume(coinId) {
   const rows = await getCoinMarketRows(coinId);
   return rows
     .filter((row) => Number.isFinite(row.volume) && row.volume > 0)
-    .map((row) => ({ date: row.date, value: row.volume, label: formatUsd(row.volume) }));
+    .map((row) => ({ date: row.date, value: row.volume, label: formatKrw(row.volume) }));
 }
 
 async function safeMetric(key, loader) {
