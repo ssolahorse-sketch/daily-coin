@@ -1,6 +1,6 @@
-# Daily Coin
+# Sola Horse
 
-Daily Coin is a private crypto and macro dashboard with a Daily Signal score.
+Sola Horse is a private crypto and macro dashboard.
 
 ## Run Locally
 
@@ -27,4 +27,3 @@ Do not commit real passwords to GitHub. Use Render environment variables instead
 $env:BITBO_API_KEY="..."
 npm start
 ```
-

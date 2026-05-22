@@ -58,16 +58,11 @@ button {
 .logo-mark {
   width: 112px;
   height: 112px;
-  display: grid;
-  place-items: center;
+  display: block;
   margin: 0 auto;
   border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 28px;
-  background: linear-gradient(155deg, #66d28f, #f0bd5b 58%, #79b8ff);
-  color: #101213;
-  font-size: 34px;
-  font-weight: 900;
-  letter-spacing: 0;
+  object-fit: cover;
   box-shadow: 0 28px 80px rgba(0, 0, 0, 0.32);
 }
 

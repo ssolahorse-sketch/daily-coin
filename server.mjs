@@ -70,7 +70,7 @@ function parseCsv(text) {
 async function fetchText(url, options = {}) {
   const res = await fetch(url, {
     headers: {
-      "user-agent": "DailyCoin/1.0",
+      "user-agent": "SolaHorse/1.0",
       accept: "application/json,text/plain,text/html,*/*",
       ...options.headers
     }
@@ -736,7 +736,7 @@ function sendLoginPage(req, res) {
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Daily Coin Login</title>
+    <title>Sola Horse Login</title>
     <style>
       * { box-sizing: border-box; }
       body {
@@ -758,14 +758,9 @@ function sendLoginPage(req, res) {
       .logo {
         width: 74px;
         height: 74px;
-        display: grid;
-        place-items: center;
         margin-bottom: 18px;
         border-radius: 20px;
-        background: linear-gradient(155deg, #66d28f, #f0bd5b 58%, #79b8ff);
-        color: #101213;
-        font-size: 24px;
-        font-weight: 900;
+        object-fit: cover;
       }
       h1 { margin: 0 0 6px; font-size: 26px; }
       p { margin: 0 0 18px; color: #9ea8a5; font-size: 13px; }
@@ -793,8 +788,8 @@ function sendLoginPage(req, res) {
   </head>
   <body>
     <main>
-      <div class="logo">DC</div>
-      <h1>Daily Coin</h1>
+      <img class="logo" src="/assets/sola-horse-logo.png" alt="Sola Horse">
+      <h1>Sola Horse</h1>
       <p>${failed ? '<span class="error">비밀번호가 맞지 않습니다.</span>' : "비밀번호를 입력하세요."}</p>
       <form method="post" action="/api/login">
         <input name="password" type="password" autocomplete="current-password" placeholder="Password" autofocus>
@@ -873,6 +868,6 @@ export const server = http.createServer((req, res) => {
 
 if (!env.DONSOL_LALA_NO_LISTEN) {
   server.listen(PORT, () => {
-    console.log(`Daily Coin is running at http://localhost:${PORT}`);
+    console.log(`Sola Horse is running at http://localhost:${PORT}`);
   });
 }
