@@ -23,7 +23,7 @@ const sourceNotes = {
   mvrvz: "BGeometrics / Newhedge",
   ism: "ISM 공식 페이지",
   globalM2: "MetricsMonster",
-  dxy: "Yahoo Finance / Stooq",
+  dxy: "Yahoo Finance / Stooq / FRED",
   btcRsi: "Binance Spot 8Y 14D RSI",
   btcVolume: "Binance Spot 8Y USDT Volume",
   ethRsi: "Binance Spot 8Y 14D RSI",
@@ -358,15 +358,25 @@ async function fetchYahooChart(symbol, range, interval = "1d") {
 }
 
 async function getDxy() {
-  try {
-    return await getYahooDxy();
-  } catch {
-    return getStooqDxy();
+  const loaders = [
+    () => getYahooDxy("DX-Y.NYB", "Yahoo Finance"),
+    () => getYahooDxy("DX=F", "Yahoo Finance DX Futures"),
+    getStooqDxy,
+    getFredDollarIndex
+  ];
+  let lastError = null;
+  for (const loader of loaders) {
+    try {
+      return await loader();
+    } catch (error) {
+      lastError = error;
+    }
   }
+  throw lastError || new Error("DXY data not found");
 }
 
-async function getYahooDxy() {
-  const json = await fetchYahooChart("DX-Y.NYB", "8y");
+async function getYahooDxy(symbol, source) {
+  const json = await fetchYahooChart(symbol, "8y");
   const result = json?.chart?.result?.[0];
   const timestamps = result?.timestamp || [];
   const quote = result?.indicators?.quote?.[0] || {};
@@ -393,13 +403,18 @@ async function getYahooDxy() {
       && row.high > 0
       && row.low > 0
     ))
-    .map((row) => ({ ...row, label: row.value.toFixed(2), source: "Yahoo Finance" }));
-  if (!rows.length) throw new Error("Yahoo DXY data not found");
+    .map((row) => ({ ...row, label: row.value.toFixed(2), source }));
+  if (!rows.length) throw new Error(`${source} DXY data not found`);
   return rows;
 }
 
 async function getStooqDxy() {
-  const text = await fetchText("https://stooq.com/q/d/l/?s=dx.f&i=d");
+  let text = "";
+  try {
+    text = await fetchText("https://stooq.com/q/d/l/?s=dx.f&i=d");
+  } catch {
+    text = await fetchText("https://r.jina.ai/http://https://stooq.com/q/d/l/?s=dx.f&i=d");
+  }
   const cutoffDate = new Date();
   cutoffDate.setUTCFullYear(cutoffDate.getUTCFullYear() - 8);
   const cutoff = cutoffDate.toISOString().slice(0, 10);
@@ -425,6 +440,22 @@ async function getStooqDxy() {
     ))
     .map((row) => ({ ...row, label: row.value.toFixed(2), source: "Stooq" }));
   if (!rows.length) throw new Error("Stooq DXY data not found");
+  return rows;
+}
+
+async function getFredDollarIndex() {
+  const text = await fetchText("https://fred.stlouisfed.org/graph/fredgraph.csv?id=DTWEXBGS");
+  const cutoffDate = new Date();
+  cutoffDate.setUTCFullYear(cutoffDate.getUTCFullYear() - 8);
+  const cutoff = cutoffDate.toISOString().slice(0, 10);
+  const rows = parseCsv(text)
+    .map(([date, close]) => {
+      const value = Number(close);
+      return { date, value, open: value, high: value, low: value, close: value };
+    })
+    .filter((row) => row.date >= cutoff && Number.isFinite(row.value) && row.value > 0)
+    .map((row) => ({ ...row, label: row.value.toFixed(2), source: "FRED Broad Dollar Index" }));
+  if (!rows.length) throw new Error("FRED dollar index data not found");
   return rows;
 }
 
