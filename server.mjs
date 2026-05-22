@@ -462,13 +462,20 @@ const binanceSymbols = {
   solana: "SOLUSDT"
 };
 
+const yahooCoinSymbols = {
+  bitcoin: "BTC-USD",
+  ethereum: "ETH-USD",
+  ripple: "XRP-USD",
+  solana: "SOL-USD"
+};
+
 const coinMarketRowsCache = new Map();
 
 async function getCoinMarketRows(coinId) {
   const symbol = binanceSymbols[coinId];
   if (!symbol) throw new Error(`${coinId} market symbol not found`);
   if (coinMarketRowsCache.has(symbol)) return coinMarketRowsCache.get(symbol);
-  const rowsPromise = getBinanceMarketRows(coinId, symbol);
+  const rowsPromise = getBinanceMarketRows(coinId, symbol).catch(() => getYahooCoinMarketRows(coinId));
   coinMarketRowsCache.set(symbol, rowsPromise);
   try {
     const rows = await rowsPromise;
@@ -505,7 +512,7 @@ async function getBinanceMarketRows(coinId, symbol) {
       const volume = Number(candle[7]);
       if (date >= today || seen.has(date) || !Number.isFinite(price) || price <= 0) continue;
       seen.add(date);
-      rows.push({ date, price, volume });
+      rows.push({ date, price, volume, source: "Binance Spot" });
     }
     const lastOpenTime = Number(candles[candles.length - 1]?.[0]);
     if (!Number.isFinite(lastOpenTime) || lastOpenTime <= startTime) break;
@@ -516,19 +523,33 @@ async function getBinanceMarketRows(coinId, symbol) {
   return rows;
 }
 
+async function getYahooCoinMarketRows(coinId) {
+  const symbol = yahooCoinSymbols[coinId];
+  if (!symbol) throw new Error(`${coinId} Yahoo symbol not found`);
+  const json = await fetchYahooChart(symbol, "8y");
+  const result = json?.chart?.result?.[0];
+  const timestamps = result?.timestamp || [];
+  const quote = result?.indicators?.quote?.[0] || {};
+  const rows = completedDailyMarketRows(timestamps, quote.close || [], quote.volume || [])
+    .map((row) => ({ ...row, source: "Yahoo Finance" }));
+  if (!rows.length) throw new Error(`${coinId} Yahoo market data not found`);
+  return rows;
+}
+
 async function getCoinRsi(coinId) {
   const marketRows = await getCoinMarketRows(coinId);
+  const source = marketRows.find((row) => row.source)?.source || sourceNotes[`${coinId}Rsi`] || "";
   const priceRows = marketRows.map((row) => [new Date(`${row.date}T00:00:00Z`).getTime(), row.price]);
   const rows = calculateRsiRows(priceRows);
   if (!rows.length) throw new Error(`${coinId} RSI data not found`);
-  return rows.map((row) => ({ ...row, source: "Binance Spot" }));
+  return rows.map((row) => ({ ...row, source }));
 }
 
 async function getCoinVolume(coinId) {
   const rows = await getCoinMarketRows(coinId);
   return rows
     .filter((row) => Number.isFinite(row.volume) && row.volume > 0)
-    .map((row) => ({ date: row.date, value: row.volume, label: formatUsd(row.volume), source: "Binance Spot" }));
+    .map((row) => ({ date: row.date, value: row.volume, label: formatUsd(row.volume), source: row.source || "Binance Spot" }));
 }
 
 async function safeMetric(key, loader) {
